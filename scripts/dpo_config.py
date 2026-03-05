@@ -2,6 +2,9 @@ from model_utility import get_model_architecture, get_model_num_params, get_use_
 from copy import deepcopy
 from lrs_lookup import get_dpo_lr
 
+# Target total batch size (per_device * gpu_nums * gradient_accumulation_steps)
+TARGET_TOTAL_BATCH_SIZE = 64
+
 DPO_CONFIG = {
     "0_1_b": {
         "lr": 1.35e-5,
@@ -100,14 +103,14 @@ def get_config(param_nums: int) -> dict:
         result = DPO_CONFIG["12_14_b"]
     elif param_nums < 15_000_000_000:  
         result = DPO_CONFIG["14_15_b"]
-    elif param_nums < 35_000_000_000:
+    elif param_nums < 40_000_000_000:
         result = DPO_CONFIG["15_40_b"]
     elif param_nums < 80_000_000_000:
         result = DPO_CONFIG["40_80_b"]
     else:
         print(f"Model size {param_nums} is not supported", flush=True)
         result = {
-            "lr": 4e-5,
+            "lr": 3e-6,
             "distributed": "ds",
             "gpu_count": 8,
             "batch_size": 6,
@@ -213,8 +216,10 @@ def get_training_json(train_info: dict) -> dict:
         run_config["gradient_checkpointing"] = False
     
     total_batch_size = run_config["batch_size"] * run_config["gpu_nums"]
-    if total_batch_size < 64:
-        run_config["gradient_accumulation_steps"] = min(4, int(64 / total_batch_size))
+    if total_batch_size < TARGET_TOTAL_BATCH_SIZE:
+        run_config["gradient_accumulation_steps"] = min(
+            4, max(1, int(TARGET_TOTAL_BATCH_SIZE / total_batch_size))
+        )
     
     if train_info["find_lk_lr"]:
         # get lr from lrs_lookup.py

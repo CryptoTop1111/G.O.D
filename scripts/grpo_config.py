@@ -71,7 +71,7 @@ GRPO_CONFIG = {
         "distributed": "ddp",
         "gpu_count": 4,
         "use_lora": True,
-        "batch_size": 2,
+        "batch_size": 2,  # kept low for vllm colocate memory
         "vllm_gpu_memory_utilization": 0.8,
     },
     "15_20_b": {
@@ -152,7 +152,7 @@ def get_grpo_config(param_nums: int) -> dict:
     else:
         print(f"Model size {param_nums} is not supported")
         return {
-            "lr": 4e-5,
+            "lr": 3e-6,
             "distributed": "ds",
             "gpu_count": 8,
             "batch_size": 6,
@@ -318,9 +318,6 @@ def get_training_json(train_info: dict) -> dict:
             run_config["batch_size"] = 16  # this is high because we use 4bit
         elif config["label"] == "40_80_b":
             run_config["batch_size"] = 2
-
-        elif config["label"] == "13_15_b":
-            run_config["batch_size"] = 12
 
     total_batch_size = run_config["batch_size"] * run_config["gpu_nums"]
     if total_batch_size < 64:

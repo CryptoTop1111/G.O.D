@@ -5,6 +5,7 @@ from model_utility import (
     disable_flash_attention,
     get_data_size,
     get_gpu_count,
+    get_gradient_checkpointing,
 )
 from copy import deepcopy
 from lrs_lookup import get_instruct_lr
@@ -108,7 +109,7 @@ def get_instruct_config(param_nums: int) -> dict:
         result = INSTRUCT_CONFIG["9_12_b"]
     elif param_nums < 15_000_000_000:
         result = INSTRUCT_CONFIG["12_15_b"]
-    elif param_nums < 35_000_000_000:
+    elif param_nums < 40_000_000_000:
         result = INSTRUCT_CONFIG["15_40_b"]
     elif param_nums < 80_000_000_000:
         result = INSTRUCT_CONFIG["40_80_b"]
@@ -208,7 +209,7 @@ def get_training_json(train_info: dict) -> dict:
         "output_dir": train_info["output_dir"],
         "request_path": train_info["request_path"],
         "distributed": config.get("distributed", "ddp"),
-        "gradient_checkpointing": "True",
+        "gradient_checkpointing": get_gradient_checkpointing(model_name),
         "gradient_accumulation_steps": 4,
         "use_attn_implementation": (
             "kernels-community/vllm-flash-attn3"
@@ -276,19 +277,20 @@ def get_training_json(train_info: dict) -> dict:
     run_config["learning_rate"] *= train_info["reg_ratio"]
     run_cmd = get_run_cmd(run_config, run_config["gpu_nums"])
     train_request = deepcopy(train_info)
+    train_request.setdefault("min_steps", 0)
     train_request["save_before_remaining_time"] = 3
     train_request["adjust_batch_size"] = False
     train_request["periodic_save_steps"] = 500
     train_request["checking_step"] = 70
 
+    min_steps = train_request["min_steps"]
     if param_nums < 1_000_000_000:
         train_request["min_steps"] = max(
-            int(train_info["hours_to_complete"] * 100), train_request["min_steps"]
+            int(train_info["hours_to_complete"] * 100), min_steps
         )
-
     elif param_nums < 9_000_000_000:
         train_request["min_steps"] = max(
-            int(train_info["hours_to_complete"] * 70), train_request["min_steps"]
+            int(train_info["hours_to_complete"] * 70), min_steps
         )
 
     return {"train_request": train_request, "run_cmd": run_cmd}
